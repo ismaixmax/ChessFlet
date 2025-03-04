@@ -103,6 +103,9 @@ jobs:
   build-windows:
     runs-on: windows-latest
 
+    env:
+      PYTHONIOENCODING: utf-8
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -122,6 +125,10 @@ jobs:
       with:
         flutter-version: ${{ env.FLUTTER_VERSION }}
 
+    - name: Configure Terminal for UTF-8
+      run: |
+        chcp 65001
+
     - name: Flet Build Windows
       run: |
         flutter config --no-analytics
@@ -134,7 +141,6 @@ jobs:
         path: build/windows
         if-no-files-found: warn
         overwrite: false
-
   build-aab:
     runs-on: macos-latest
 
