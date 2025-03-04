@@ -242,7 +242,7 @@ jobs:
     - name: Flet Build IPA
       run: |
         flutter config --no-analytics
-        flet build ipa --verbose --build-number=$BUILD_NUMBER --build-version=$BUILD_VERSION 
+        flet build ipa --verbose --build-number=$BUILD_NUMBER --build-version=$BUILD_VERSION
 
     - name: Upload IPA Artifact
       uses: actions/upload-artifact@v4.3.4
@@ -250,4 +250,4 @@ jobs:
         name: ipa-build-artifact
         path: build/ipa
         if-no-files-found: warn
-        overwrite: fals
+        overwrite: false  # Corrected to valid YAML boolean
