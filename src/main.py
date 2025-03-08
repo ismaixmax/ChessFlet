@@ -1,30 +1,32 @@
 import flet as ft
 import chess
+import chess.svg as svg
 
 class ChessApp:
-    def __init__(self, page: ft.Page):
+    def __init__(self, page: ft.Page, device_type: str):
         self.page = page
+        self.device_type = device_type
         self.board = chess.Board()
         self.move_history = []
         self.selected_square = None
         self.legal_moves = []
-        self.piece_images = self.load_piece_images()
+        self.piece_images = self.load_piece_images()  # Load piece images once
         self.setup_ui()
 
     def load_piece_images(self):
         return {
-            "P": "https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg",
-            "N": "https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg",
-            "B": "https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg",
-            "R": "https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg",
-            "Q": "https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg",
-            "K": "https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg",
-            "p": "https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg",
-            "n": "https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg",
-            "b": "https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg",
-            "r": "https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg",
-            "q": "https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg",
-            "k": "https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg",
+            "P": svg.piece(chess.Piece(chess.PAWN, chess.WHITE)),
+            "N": svg.piece(chess.Piece(chess.KNIGHT, chess.WHITE)),
+            "B": svg.piece(chess.Piece(chess.BISHOP, chess.WHITE)),
+            "R": svg.piece(chess.Piece(chess.ROOK, chess.WHITE)),
+            "Q": svg.piece(chess.Piece(chess.QUEEN, chess.WHITE)),
+            "K": svg.piece(chess.Piece(chess.KING, chess.WHITE)),
+            "p": svg.piece(chess.Piece(chess.PAWN, chess.BLACK)),
+            "n": svg.piece(chess.Piece(chess.KNIGHT, chess.BLACK)),
+            "b": svg.piece(chess.Piece(chess.BISHOP, chess.BLACK)),
+            "r": svg.piece(chess.Piece(chess.ROOK, chess.BLACK)),
+            "q": svg.piece(chess.Piece(chess.QUEEN, chess.BLACK)),
+            "k": svg.piece(chess.Piece(chess.KING, chess.BLACK)),
         }
 
     def setup_ui(self):
@@ -43,8 +45,18 @@ class ChessApp:
             runs_count=8,
             max_extent=self.calculate_tile_size(),
             child_aspect_ratio=1,
+            spacing=0,
+            run_spacing=0,
+            controls=[
+                ft.Container(
+                    content=None,
+                    alignment=ft.alignment.center,
+                    data=square,
+                    on_click=self.on_square_click,
+                )
+                for square in range(64)  # Ensure 64 elements for the chessboard
+            ],
         )
-        self.update_board()
 
         self.undo_button = ft.ElevatedButton(text="Undo", on_click=self.on_undo, disabled=True)
         self.redo_button = ft.ElevatedButton(text="Redo", on_click=self.on_redo, disabled=True)
@@ -63,6 +75,7 @@ class ChessApp:
                     ft.Row(
                         [self.undo_button, self.redo_button, self.reset_button],
                         alignment=ft.MainAxisAlignment.CENTER,
+                        spacing=10,
                     ),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -70,76 +83,107 @@ class ChessApp:
             )
         )
 
+        self.update_board()
+
     def calculate_board_size(self):
         screen_width = self.page.width
         screen_height = self.page.height
-        board_size = min(screen_width, screen_height) * 0.9  # 90% of the smaller dimension
-        max_size = 600  # Matches the window width
+        if self.device_type == "Phone":
+            board_size = min(screen_width, screen_height) * 1.5  # 80% of the smaller dimension
+        elif self.device_type == "Tablet":
+            board_size = min(screen_width, screen_height) * 0.7  # 85% of the smaller dimension
+        else:  # Desktop
+            board_size = min(screen_width, screen_height) * 2  # 90% of the smaller dimension
+        max_size = 500  # Matches the window width
         return min(board_size, max_size)
 
     def calculate_tile_size(self):
-        return self.calculate_board_size() // 8
+        if self.device_type == "Phone":
+            return self.calculate_board_size() / 10
+        elif self.device_type == "Tablet":
+            return self.calculate_board_size() / 8
+        else:  # Desktop
+            return self.calculate_board_size() / 8
 
     def update_board(self):
-        self.board_grid.controls.clear()
-        for rank in range(8):
-            for file in range(8):
-                square = chess.square(file, 7 - rank)
-                piece = self.board.piece_at(square)
-                piece_symbol = piece.symbol() if piece else None
-                image_url = self.piece_images.get(piece_symbol, None)
-                highlight_color = "#F6F669" if square == self.selected_square else ("#ADD8E6" if square in self.legal_moves else None)
-                tile = ft.Container(
-                    content=ft.Image(src=image_url, width=self.calculate_tile_size() - 20, height=self.calculate_tile_size() - 20) if image_url else None,
-                    width=self.calculate_tile_size(),
-                    height=self.calculate_tile_size(),
-                    bgcolor=highlight_color if highlight_color else ("#DDB88C" if (rank + file) % 2 else "#A66D4F"),
-                    alignment=ft.alignment.center,
-                    on_click=lambda e, s=square: self.on_square_click(s)
-                )
-                self.board_grid.controls.append(tile)
-        self.page.update()
-        def on_square_click(self, square):
-            """Handle square click events."""
-            if self.selected_square is None:
-                piece = self.board.piece_at(square)
-                if piece and piece.color == (self.board.turn == chess.WHITE):
-                    self.selected_square = square
-                    self.legal_moves = [move.to_square for move in self.board.legal_moves if move.from_square == square]
+        """Update the board display."""
+        for square in chess.SQUARES:
+            piece = self.board.piece_at(square)
+            if piece:
+                piece_image = self.piece_images[piece.symbol()]
             else:
-                move = chess.Move(self.selected_square, square)
-                if move in self.board.legal_moves:
-                    self.board.push(move)
-                    self.move_history.append(move)  # Add move to history
-                    self.undo_button.disabled = False  # Enable undo button
-                    self.redo_button.disabled = True  # Disable redo button after a new move
-                self.selected_square = None
-                self.legal_moves = []
-            self.update_board()
-            self.update_turn_label()
+                piece_image = None
 
-            # Check for game over conditions
-            if self.board.is_checkmate():
-                print("Checkmate!")
-            elif self.board.is_stalemate():
-                print("Stalemate!")
-            elif self.board.is_insufficient_material():
-                print("Draw due to insufficient material!")
-            elif self.board.is_game_over():
-                print("Game over!")
+            square_control = self.board_grid.controls[square]
+            row, col = divmod(square, 8)
+            tile_color = "#D18B47" if (row + col) % 2 == 0 else "#FFCE9E"  # Dark and light colors
+
+            if square in self.legal_moves:
+                tile_color = "#ADD8E6"  # Highlight color for legal moves
+
+            if piece_image:
+                square_control.content = ft.AnimatedSwitcher(
+                    content=ft.Image(src=piece_image),
+                    duration=500,  # Animation duration in milliseconds
+                    transition=ft.AnimatedSwitcherTransition.SCALE,
+                )
+            else:
+                square_control.content = ft.AnimatedSwitcher(
+                    content=ft.Container(),  # Use an empty container instead of None
+                    duration=500,  # Animation duration in milliseconds
+                    transition=ft.AnimatedSwitcherTransition.SCALE,
+                )
+            
+            square_control.bgcolor = tile_color
+            square_control.update()
+
+        self.page.update()
 
     def update_turn_label(self):
         """Update the turn label to indicate whose turn it is."""
         self.turn_label.value = f"Turn: {'White' if self.board.turn == chess.WHITE else 'Black'}"
-        self.page.update()
+        self.turn_label.update()
+
+    def on_square_click(self, e):
+        """Handle square click events."""
+        square = e.control.data  # Extract the square index from the event
+        if self.selected_square is None:
+            piece = self.board.piece_at(square)
+            if piece and piece.color == (self.board.turn == chess.WHITE):
+                self.selected_square = square
+                self.legal_moves = [move.to_square for move in self.board.legal_moves if move.from_square == square]
+        else:
+            move = chess.Move(self.selected_square, square)
+            if move in self.board.legal_moves:
+                self.board.push(move)
+                self.move_history.append(move)  # Add move to history
+                self.undo_button.disabled = False  # Enable undo button
+                self.redo_button.disabled = True  # Disable redo button after a new move
+            self.selected_square = None
+            self.legal_moves = []
+        self.update_board()
+        self.update_turn_label()
+        # Check for game over conditions
+        if self.board.is_checkmate():
+            print("Checkmate!")
+        elif self.board.is_stalemate():
+            print("Stalemate!")
+        elif self.board.is_insufficient_material():
+            print("Insufficient material!")
+        elif self.board.is_seventyfive_moves():
+            print("Draw by seventy-five moves rule!")
+        elif self.board.is_fivefold_repetition():
+            print("Draw by fivefold repetition!")
+        elif self.board.is_variant_draw():
+            print("Draw by variant rule!")
 
     def on_undo(self, e):
         """Undo the last move."""
-        if self.board.move_stack:
-            move = self.board.pop()
-            self.move_history.append(move)  # Add undone move to redo history
+        if self.move_history:
+            self.board.pop()
+            self.move_history.pop()
             self.redo_button.disabled = False  # Enable redo button
-            if not self.board.move_stack:
+            if not self.move_history:
                 self.undo_button.disabled = True  # Disable undo button if no moves left
             self.update_board()
             self.update_turn_label()
@@ -147,13 +191,10 @@ class ChessApp:
     def on_redo(self, e):
         """Redo the last undone move."""
         if self.move_history:
-            move = self.move_history.pop()
+            move = self.move_history[-1]
             self.board.push(move)
-            self.undo_button.disabled = False  # Enable undo button
-            if not self.move_history:
-                self.redo_button.disabled = True  # Disable redo button if no moves left
-            self.update_board()
-            self.update_turn_label()
+            self.move_history.pop()
+            self.undo_button.disabled = False
 
     def on_reset(self, e):
         """Reset the board to the initial state."""
@@ -165,11 +206,22 @@ class ChessApp:
         self.redo_button.disabled = True
         self.update_board()
         self.update_turn_label()
-    
+
 def main(page: ft.Page):
     page.window_width = 400
     page.window_height = 1100
     page.update()
-    ChessApp(page)
+
+    user_agent = page.client_user_agent
+    if "Mobile" in user_agent or "Android" in user_agent:
+        device_type = "Phone"
+    elif "Tablet" in user_agent:
+        device_type = "Tablet"
+    else:
+        device_type = "Desktop"
+
+    print(f"Running on: {device_type}")
+
+    ChessApp(page, device_type)
 
 ft.app(target=main)
