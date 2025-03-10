@@ -1,6 +1,8 @@
 import flet as ft
 import chess
 import chess.svg as svg
+import chess.engine
+import random
 
 class ChessApp:
     def __init__(self, page: ft.Page, device_type: str):
@@ -11,6 +13,11 @@ class ChessApp:
         self.selected_square = None
         self.legal_moves = []
         self.piece_images = self.load_piece_images()  # Load piece images once
+        self.ai_enabled = False
+        self.ai_difficulty = 1
+        self.ai_side = chess.BLACK
+        self.game_started = False
+        self.engine = chess.engine.SimpleEngine.popen_uci(r"C:/Users/Administrator/Downloads/Stockfish 11/stockfish-11-win/stockfish-11-win/Windows/stockfish_20011801_x64.exe")  # Update with your engine path
         self.setup_ui()
 
     def load_piece_images(self):
@@ -61,6 +68,18 @@ class ChessApp:
         self.undo_button = ft.ElevatedButton(text="Undo", on_click=self.on_undo, disabled=True)
         self.redo_button = ft.ElevatedButton(text="Redo", on_click=self.on_redo, disabled=True)
         self.reset_button = ft.ElevatedButton(text="Reset", on_click=self.on_reset)
+        self.start_button = ft.ElevatedButton(text="Start", on_click=self.on_start)
+
+        self.ai_toggle = ft.Switch(label="Enable AI", on_change=self.on_ai_toggle)
+        self.ai_difficulty_slider = ft.Slider(min=1, max=3, value=1, on_change=self.on_ai_difficulty_change)
+        self.ai_side_dropdown = ft.Dropdown(
+            options=[
+                ft.dropdown.Option(text="White", key=chess.WHITE),
+                ft.dropdown.Option(text="Black", key=chess.BLACK),
+            ],
+            value=chess.BLACK,
+            on_change=self.on_ai_side_change,
+        )
 
         self.page.add(
             ft.Column(
@@ -73,7 +92,12 @@ class ChessApp:
                         height=self.calculate_board_size(),
                     ),
                     ft.Row(
-                        [self.undo_button, self.redo_button, self.reset_button],
+                        [self.undo_button, self.redo_button, self.reset_button, self.start_button],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        spacing=10,
+                    ),
+                    ft.Row(
+                        [self.ai_toggle, self.ai_difficulty_slider, self.ai_side_dropdown],
                         alignment=ft.MainAxisAlignment.CENTER,
                         spacing=10,
                     ),
@@ -146,6 +170,9 @@ class ChessApp:
 
     def on_square_click(self, e):
         """Handle square click events."""
+        if not self.game_started:
+            return
+
         square = e.control.data  # Extract the square index from the event
         if self.selected_square is None:
             piece = self.board.piece_at(square)
@@ -159,23 +186,18 @@ class ChessApp:
                 self.move_history.append(move)  # Add move to history
                 self.undo_button.disabled = False  # Enable undo button
                 self.redo_button.disabled = True  # Disable redo button after a new move
-            self.selected_square = None
-            self.legal_moves = []
+                self.selected_square = None
+                self.legal_moves = []
+                self.update_board()
+                self.update_turn_label()
+                self.check_game_over()
+                if self.ai_enabled and self.board.turn == self.ai_side:
+                    self.make_ai_move()
+            else:
+                self.selected_square = None
+                self.legal_moves = []
         self.update_board()
         self.update_turn_label()
-        # Check for game over conditions
-        if self.board.is_checkmate():
-            print("Checkmate!")
-        elif self.board.is_stalemate():
-            print("Stalemate!")
-        elif self.board.is_insufficient_material():
-            print("Insufficient material!")
-        elif self.board.is_seventyfive_moves():
-            print("Draw by seventy-five moves rule!")
-        elif self.board.is_fivefold_repetition():
-            print("Draw by fivefold repetition!")
-        elif self.board.is_variant_draw():
-            print("Draw by variant rule!")
 
     def on_undo(self, e):
         """Undo the last move."""
@@ -206,6 +228,115 @@ class ChessApp:
         self.redo_button.disabled = True
         self.update_board()
         self.update_turn_label()
+
+    def on_start(self, e):
+        """Start the game."""
+        self.game_started = True
+        if self.ai_enabled and self.board.turn == self.ai_side:
+            self.make_ai_move()
+
+    def on_ai_toggle(self, e):
+        """Toggle AI on or off."""
+        self.ai_enabled = e.control.value
+        if self.ai_enabled and self.board.turn == self.ai_side:
+            self.make_ai_move()
+
+    def on_ai_difficulty_change(self, e):
+        """Change AI difficulty."""
+        self.ai_difficulty = int(e.control.value)
+
+    def on_ai_side_change(self, e):
+        """Change AI side."""
+        self.ai_side = e.control.value
+
+    def make_ai_move(self):
+        """Make a move for the AI."""
+        result = self.engine.play(self.board, chess.engine.Limit(time=2 * self.ai_difficulty))
+        self.board.push(result.move)
+        self.move_history.append(result.move)
+        self.update_board()
+        self.update_turn_label()
+        self.check_game_over()
+
+    def get_best_move(self, legal_moves, depth):
+        """Get the best move for the AI using a simple evaluation function."""
+        best_move = None
+        best_value = -float('inf')
+        for move in legal_moves:
+            self.board.push(move)
+            board_value = self.evaluate_board(depth - 1, -float('inf'), float('inf'))
+            self.board.pop()
+            if board_value > best_value:
+                best_value = board_value
+                best_move = move
+        return best_move
+
+    def evaluate_board(self, depth, alpha, beta):
+        """Evaluate the board using a simple evaluation function."""
+        if depth == 0 or self.board.is_game_over():
+            return self.get_board_value()
+        legal_moves = list(self.board.legal_moves)
+        if self.board.turn == self.ai_side:
+            max_eval = -float('inf')
+            for move in legal_moves:
+                self.board.push(move)
+                eval = self.evaluate_board(depth - 1, alpha, beta)
+                self.board.pop()
+                max_eval = max(max_eval, eval)
+                alpha = max(alpha, eval)
+                if beta <= alpha:
+                    break
+            return max_eval
+        else:
+            min_eval = float('inf')
+            for move in legal_moves:
+                self.board.push(move)
+                eval = self.evaluate_board(depth - 1, alpha, beta)
+                self.board.pop()
+                min_eval = min(min_eval, eval)
+                beta = min(beta, eval)
+                if beta <= alpha:
+                    break
+            return min_eval
+
+    def get_board_value(self):
+        """Get the board value using a simple evaluation function."""
+        value = 0
+        for square in chess.SQUARES:
+            piece = self.board.piece_at(square)
+            if piece:
+                value += self.get_piece_value(piece)
+        return value
+
+    def get_piece_value(self, piece):
+        """Get the value of a piece."""
+        values = {
+            chess.PAWN: 1,
+            chess.KNIGHT: 3,
+            chess.BISHOP: 3,
+            chess.ROOK: 5,
+            chess.QUEEN: 9,
+            chess.KING: 0,
+        }
+        return values[piece.piece_type] * (1 if piece.color == self.ai_side else -1)
+
+    def check_game_over(self):
+        """Check for game over conditions."""
+        if self.board.is_checkmate():
+            print("Checkmate!")
+        elif self.board.is_stalemate():
+            print("Stalemate!")
+        elif self.board.is_insufficient_material():
+            print("Insufficient material!")
+        elif self.board.is_seventyfive_moves():
+            print("Draw by seventy-five moves rule!")
+        elif self.board.is_fivefold_repetition():
+            print("Draw by fivefold repetition!")
+        elif self.board.is_variant_draw():
+            print("Draw by variant rule!")
+
+    def __del__(self):
+        self.engine.quit()
 
 def main(page: ft.Page):
     page.window_width = 400
