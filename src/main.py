@@ -70,17 +70,6 @@ class ChessApp:
         self.reset_button = ft.ElevatedButton(text="Reset", on_click=self.on_reset)
         self.start_button = ft.ElevatedButton(text="Start", on_click=self.on_start)
 
-        self.ai_toggle = ft.Switch(label="Enable AI", on_change=self.on_ai_toggle)
-        self.ai_difficulty_slider = ft.Slider(min=1, max=3, value=1, on_change=self.on_ai_difficulty_change)
-        self.ai_side_dropdown = ft.Dropdown(
-            options=[
-                ft.dropdown.Option(text="White", key=chess.WHITE),
-                ft.dropdown.Option(text="Black", key=chess.BLACK),
-            ],
-            value=chess.BLACK,
-            on_change=self.on_ai_side_change,
-        )
-
         self.page.add(
             ft.Column(
                 [
@@ -96,18 +85,57 @@ class ChessApp:
                         alignment=ft.MainAxisAlignment.CENTER,
                         spacing=10,
                     ),
-                    ft.Row(
-                        [self.ai_toggle, self.ai_difficulty_slider, self.ai_side_dropdown],
-                        alignment=ft.MainAxisAlignment.CENTER,
-                        spacing=10,
-                    ),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
                 expand=True,
             )
         )
 
-        self.update_board()
+        self.show_initial_dialog()
+
+    def show_initial_dialog(self):
+        """Show the initial dialog to choose playing with AI or not."""
+        self.ai_toggle = ft.Switch(label="Play with AI", on_change=self.on_ai_toggle)
+        self.ai_difficulty_slider = ft.Slider(min=1, max=3, value=1, on_change=self.on_ai_difficulty_change)
+        self.ai_side_dropdown = ft.Dropdown(
+            options=[
+                ft.dropdown.Option(text="White", key=chess.WHITE),
+                ft.dropdown.Option(text="Black", key=chess.BLACK),
+            ],
+            value=chess.BLACK,
+            on_change=self.on_ai_side_change,
+        )
+        self.start_button = ft.ElevatedButton(text="Start Game", on_click=self.on_start)
+        self.back_button = ft.ElevatedButton(text="Back", on_click=self.on_back)
+
+        self.dialog_container = ft.Container(
+            content=ft.Column(
+                [
+                    self.ai_toggle,
+                    ft.Text("AI Difficulty"),
+                    self.ai_difficulty_slider,
+                    ft.Text("AI Side"),
+                    self.ai_side_dropdown,
+                    ft.Row([self.start_button, self.back_button], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                expand=True,
+            ),
+            alignment=ft.alignment.center,
+            bgcolor=ft.colors.WHITE,
+            padding=20,
+            border_radius=10,
+            shadow=ft.BoxShadow(blur_radius=10, spread_radius=5, color=ft.colors.BLACK12),
+        )
+
+        self.page.overlay.append(self.dialog_container)
+        self.page.update()
+
+    def on_back(self, e):
+        """Handle back button click event."""
+        self.page.overlay.remove(self.dialog_container)
+        self.page.update()
+        self.show_initial_dialog()
 
     def calculate_board_size(self):
         screen_width = self.page.width
@@ -228,18 +256,21 @@ class ChessApp:
         self.redo_button.disabled = True
         self.update_board()
         self.update_turn_label()
+        self.show_initial_dialog()
 
     def on_start(self, e):
         """Start the game."""
         self.game_started = True
+        self.page.overlay.remove(self.dialog_container)
+        self.page.update()
         if self.ai_enabled and self.board.turn == self.ai_side:
+            self.make_ai_move()
+        elif self.ai_enabled and self.ai_side == chess.WHITE:
             self.make_ai_move()
 
     def on_ai_toggle(self, e):
         """Toggle AI on or off."""
         self.ai_enabled = e.control.value
-        if self.ai_enabled and self.board.turn == self.ai_side:
-            self.make_ai_move()
 
     def on_ai_difficulty_change(self, e):
         """Change AI difficulty."""
@@ -251,7 +282,7 @@ class ChessApp:
 
     def make_ai_move(self):
         """Make a move for the AI."""
-        result = self.engine.play(self.board, chess.engine.Limit(time=2 * self.ai_difficulty))
+        result = self.engine.play(self.board, chess.engine.Limit(time=1 * self.ai_difficulty))
         self.board.push(result.move)
         self.move_history.append(result.move)
         self.update_board()
