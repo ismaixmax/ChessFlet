@@ -251,7 +251,7 @@ class ChessApp:
 
     def make_ai_move(self):
         """Make a move for the AI."""
-        result = self.engine.play(self.board, chess.engine.Limit(time=2 * self.ai_difficulty))
+        result = self.engine.play(self.board, chess.engine.Limit(time=1 * self.ai_difficulty))
         self.board.push(result.move)
         self.move_history.append(result.move)
         self.update_board()
